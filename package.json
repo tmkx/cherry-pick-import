@@ -1,0 +1,45 @@
+{
+  "name": "cherry-pick-import",
+  "version": "0.0.0",
+  "description": "Cherry-pick imported specified identifiers from a module",
+  "author": "Tmk <i@tmk.im>",
+  "keywords": [
+    "import",
+    "export",
+    "trim",
+    "pick",
+    "elimination"
+  ],
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "default": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "repository": {
+    "url": "https://github.com/tmkx/cherry-pick-import.git"
+  },
+  "scripts": {
+    "prepack": "tsup",
+    "watch": "tsup --watch",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "jiti": "^1.21.6",
+    "ts-morph": "^23.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.2"
+  },
+  "packageManager": "pnpm@9.5.0"
+}
