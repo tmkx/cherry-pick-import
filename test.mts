@@ -1,7 +1,9 @@
 import ts from 'typescript';
+import tsserver from 'typescript/lib/tsserverlibrary';
 
 const sourceText = `
 import cssText from 'data-text:~/contents/plasmo-overlay.css';
+import unused from 'unused';
 import type { PlasmoCSConfig } from 'plasmo';
 
 export const config: PlasmoCSConfig = {
@@ -28,7 +30,7 @@ function PlasmoOverlay() {
   );
 };
 
-export default PlasmoOverlay;
+// export default PlasmoOverlay;
 `;
 
 const start = performance.now();
@@ -36,95 +38,67 @@ const start = performance.now();
 const sourceFilename = '/mod.tsx';
 const keepIdentifiers = ['config'];
 
-class LightCompilerHost implements ts.CompilerHost {
-  jsDocParsingMode = ts.JSDocParsingMode.ParseNone;
-  getSourceFile(
-    fileName: string,
-    languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions
-  ): ts.SourceFile | undefined {
-    if (fileName !== sourceFilename) return undefined;
-    return ts.createSourceFile(fileName, sourceText, languageVersionOrOptions, true);
-  }
-  getSourceFileByPath?(
-    fileName: string,
-    path: ts.Path,
-    languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
-    onError?: (message: string) => void,
-    shouldCreateNewSourceFile?: boolean
-  ): ts.SourceFile | undefined {
-    throw new Error('getSourceFileByPath Method not implemented.');
-  }
-  getDefaultLibFileName(_options: ts.CompilerOptions): string {
-    return '';
-  }
-  writeFile(fileName: string, text: string) {
-    console.log('writeFile', fileName, text);
-  }
+const compilerOptions: ts.CompilerOptions = {
+  module: ts.ModuleKind.CommonJS,
+  target: ts.ScriptTarget.ESNext,
+  skipDefaultLibCheck: true,
+  skipLibCheck: true,
+};
 
-  getCurrentDirectory(): string {
-    return '/';
-  }
-  getCanonicalFileName(fileName: string): string {
-    return fileName;
-  }
-  useCaseSensitiveFileNames(): boolean {
-    return true;
-  }
-  getNewLine(): string {
-    throw new Error('getNewLine Method not implemented.');
-  }
-  fileExists(fileName: string): boolean {
-    console.log('fileExists', fileName);
-    return fileName === sourceFilename;
-  }
-  readFile(fileName: string): string | undefined {
-    console.log('readFile', { fileName });
-    if (fileName === sourceFilename) return sourceText;
-    return undefined;
-  }
-  directoryExists(directoryName: string): boolean {
-    return directoryName === '/';
-  }
-}
-
-const compilerHost = new LightCompilerHost();
-
-const program = ts.createProgram({
-  rootNames: [sourceFilename],
-  options: {
-    module: ts.ModuleKind.CommonJS,
-    target: ts.ScriptTarget.ESNext,
-    skipDefaultLibCheck: true,
-    skipLibCheck: true,
+const lsp = tsserver.createLanguageService({
+  jsDocParsingMode: ts.JSDocParsingMode.ParseNone,
+  getCompilationSettings() {
+    return compilerOptions;
   },
-  host: compilerHost,
+  getScriptFileNames() {
+    return [sourceFilename];
+  },
+  getScriptVersion() {
+    return '1';
+  },
+  getScriptSnapshot(fileName) {
+    if (fileName !== sourceFilename) return undefined;
+    return ts.ScriptSnapshot.fromString(sourceText);
+  },
+  getCurrentDirectory() {
+    return '/';
+  },
+  directoryExists(directoryName) {
+    return directoryName === '/';
+  },
+  getDefaultLibFileName(options) {
+    return ts.getDefaultLibFileName(options);
+  },
+  readFile(path: string, encoding?: string): string | undefined {
+    throw new Error('readFile Function not implemented.');
+  },
+  fileExists(path: string): boolean {
+    return path === sourceFilename;
+  },
 });
 
-const modSf = program.getSourceFile(sourceFilename)!;
-const typeChecker = program.getTypeChecker();
+// console.log(lsp.getSuggestionDiagnostics(sourceFilename).map((diagnostics) => diagnostics.messageText));
 
-const modSymbol = typeChecker.getSymbolAtLocation(modSf)!;
-const exportsOfModule = typeChecker.getExportsOfModule(modSymbol);
-
-const unusedDecls: ts.Node[] = exportsOfModule
-  .filter((exp) => !keepIdentifiers.includes(exp.escapedName.toString()))
-  .flatMap((exp) => exp.declarations || []);
-
-const newSf = ts.transform(
-  modSf,
-  [
-    (ctx) => {
-      const visitor: ts.Visitor = (node) => {
-        if (unusedDecls.includes(node)) {
-          return;
-        }
-        return ts.visitEachChild(node, visitor, ctx);
-      };
-      return (sf) => ts.visitEachChild(sf, visitor, ctx);
-    },
-  ],
-  undefined
+const unusedIdentifierCodeFix = lsp.getCombinedCodeFix(
+  {
+    type: 'file',
+    fileName: sourceFilename,
+  },
+  'unusedIdentifier_delete',
+  {},
+  {}
+);
+const unusedImportsCodeFix = lsp.getCombinedCodeFix(
+  {
+    type: 'file',
+    fileName: sourceFilename,
+  },
+  'unusedIdentifier_deleteImports',
+  {},
+  {}
 );
 
-console.log(ts.createPrinter().printNode(ts.EmitHint.Unspecified, newSf.transformed[0], newSf.transformed[0]));
+console.log(unusedIdentifierCodeFix.changes[0].textChanges);
+console.log(unusedImportsCodeFix.changes[0].textChanges);
+
 console.log('elapsed:', `${performance.now() - start}ms`);
