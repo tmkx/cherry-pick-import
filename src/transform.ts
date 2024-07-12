@@ -94,12 +94,9 @@ export function trimExport({ filename, code, identifiers }: CherryPickTransformO
         before: [
           (ctx) => {
             const visitor: ts.Visitor = (node) => {
+              // remove all import declarations that have no specifiers, assuming that they have no side effects.
               if (ts.isImportDeclaration(node) && !node.importClause) return;
-              if (
-                ts.isVariableStatement(node) &&
-                // marked as export
-                node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
-              ) {
+              if (ts.isVariableStatement(node) && isMarkedAsExport(node)) {
                 // export const xxx = { ... };
                 const declarations = node.declarationList.declarations;
                 const [shouldKeep, shouldRemove] = partition(
@@ -108,12 +105,17 @@ export function trimExport({ filename, code, identifiers }: CherryPickTransformO
                 );
                 if (shouldKeep.length === 0) return; // no declarations should be kept, just remove the node
               }
+              if (ts.isFunctionDeclaration(node) && isMarkedAsExport(node)) {
+                // export default function () {}
+                const exportName = isMarkedAsDefault(node) ? 'default' : node.name!.text;
+                if (!identifiers.includes(exportName)) return;
+              }
               if (ts.isExportAssignment(node)) {
                 // export default xxx;
                 const escapedName = (node as unknown as ts.Type).symbol.escapedName;
                 if (!identifiers.includes(escapedName.toString())) return;
               }
-              return ts.visitEachChild(node, visitor, ctx);
+              return node; // only need to visit the top-level scope, skip ts.visitEachChild(node, visitor, ctx)
             };
             return (sf) => ts.visitEachChild(sf, visitor, ctx);
           },
@@ -122,6 +124,15 @@ export function trimExport({ filename, code, identifiers }: CherryPickTransformO
     })
     .outputText.replace(/^\s*\/\/\s*@ts-nocheck/g, '//');
 }
+
+function containsModifier(kind: ts.SyntaxKind) {
+  return function (node: { readonly modifiers?: ts.NodeArray<ts.ModifierLike> }): boolean {
+    return !!node.modifiers && node.modifiers.some((modifier) => modifier.kind === kind);
+  };
+}
+
+const isMarkedAsExport = containsModifier(ts.SyntaxKind.ExportKeyword);
+const isMarkedAsDefault = containsModifier(ts.SyntaxKind.DefaultKeyword);
 
 function toRootDirFilename(filename: string) {
   return path.posix.resolve('/', path.basename(filename));

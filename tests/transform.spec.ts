@@ -25,7 +25,6 @@ describe('trimExport', () => {
       }).trim()
     ).toMatchInlineSnapshot(`"export {};"`);
 
-    // FIXME:
     expect(
       trimExport({
         filename: '/mod.tsx',
@@ -35,10 +34,7 @@ describe('trimExport', () => {
         `,
         identifiers: [],
       }).trim()
-    ).toMatchInlineSnapshot(`
-      "export default function () { }
-      ;"
-    `);
+    ).toMatchInlineSnapshot(`"export {};"`);
   });
 
   test('not exist', () => {
@@ -103,10 +99,31 @@ describe('trimExport', () => {
         `,
         identifiers: ['foo'],
       }).trim()
-    ).toMatchInlineSnapshot(`
-      "export const foo = 'bar';
-      export default function App() { }"
-    `);
+    ).toMatchInlineSnapshot(`"export const foo = 'bar';"`);
+  });
+
+  test('default identifier', () => {
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export const foo = 'bar';
+          export default function App() {}
+        `,
+        identifiers: ['default'],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export default function App() { }"`);
+
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export const foo = 'bar';
+          export default 123;
+        `,
+        identifiers: ['default'],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export default 123;"`);
   });
 });
 
