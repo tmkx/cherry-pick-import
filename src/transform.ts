@@ -1,3 +1,4 @@
+import path from 'path';
 import ts from 'typescript/lib/tsserverlibrary';
 
 const compilerOptions: ts.CompilerOptions = {
@@ -16,6 +17,7 @@ export interface CherryPickTransformOptions {
 function createLanguageServiceHost(sourceFilename: string, sourceText: string) {
   let currentScriptVersion = 0;
   let currentSourceText = sourceText;
+  sourceFilename = toRootDirFilename(sourceFilename);
 
   const languageServiceHost: ts.LanguageServiceHost = {
     jsDocParsingMode: ts.JSDocParsingMode.ParseNone,
@@ -62,7 +64,7 @@ function createLanguageServiceHost(sourceFilename: string, sourceText: string) {
 }
 
 export function cherryPickTransform(options: CherryPickTransformOptions): string {
-  const { filename: sourceFilename } = options;
+  const sourceFilename = toRootDirFilename(options.filename);
   const { languageServiceHost, updateFile } = createLanguageServiceHost(sourceFilename, trimExport(options));
   const lsp = ts.createLanguageService(languageServiceHost);
   updateFile(applyFix(lsp, sourceFilename, 'unusedIdentifier_delete'));
@@ -119,6 +121,10 @@ export function trimExport({ filename, code, identifiers }: CherryPickTransformO
       },
     })
     .outputText.replace(/^\s*\/\/\s*@ts-nocheck/g, '//');
+}
+
+function toRootDirFilename(filename: string) {
+  return path.posix.resolve('/', path.basename(filename));
 }
 
 function partition<T>(array: ArrayLike<T>, predicate: (value: T) => boolean): [T[], T[]] {
