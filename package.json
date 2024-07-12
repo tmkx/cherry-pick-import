@@ -1,6 +1,6 @@
 {
   "name": "cherry-pick-import",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Cherry-pick imported specified identifiers from a module",
   "author": "Tmk <i@tmk.im>",
   "keywords": [
@@ -33,13 +33,15 @@
     "test": "vitest"
   },
   "dependencies": {
-    "jiti": "^1.21.6",
-    "ts-morph": "^23.0.0"
+    "jiti": "^1.21.6"
   },
   "devDependencies": {
     "tsup": "^8.1.0",
     "typescript": "^5.5.3",
     "vitest": "^2.0.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
   },
   "packageManager": "pnpm@9.5.0"
 }
