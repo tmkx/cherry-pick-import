@@ -1,5 +1,4 @@
-import ts from 'typescript';
-import tsserver from 'typescript/lib/tsserverlibrary';
+import ts from 'typescript/lib/tsserverlibrary';
 
 const sourceText = `
 import cssText from 'data-text:~/contents/plasmo-overlay.css';
@@ -10,6 +9,8 @@ export const config: PlasmoCSConfig = {
   matches: ['https://www.plasmo.com/*'],
   css: ['font.css'],
 };
+
+const hello = 'world';
 
 export const getStyle = () => {
   const style = document.createElement('style');
@@ -39,66 +40,82 @@ const sourceFilename = '/mod.tsx';
 const keepIdentifiers = ['config'];
 
 const compilerOptions: ts.CompilerOptions = {
-  module: ts.ModuleKind.CommonJS,
+  module: ts.ModuleKind.ESNext,
   target: ts.ScriptTarget.ESNext,
   skipDefaultLibCheck: true,
   skipLibCheck: true,
 };
 
-const lsp = tsserver.createLanguageService({
-  jsDocParsingMode: ts.JSDocParsingMode.ParseNone,
-  getCompilationSettings() {
-    return compilerOptions;
-  },
-  getScriptFileNames() {
-    return [sourceFilename];
-  },
-  getScriptVersion() {
-    return '1';
-  },
-  getScriptSnapshot(fileName) {
-    if (fileName !== sourceFilename) return undefined;
-    return ts.ScriptSnapshot.fromString(sourceText);
-  },
-  getCurrentDirectory() {
-    return '/';
-  },
-  directoryExists(directoryName) {
-    return directoryName === '/';
-  },
-  getDefaultLibFileName(options) {
-    return ts.getDefaultLibFileName(options);
-  },
-  readFile(path: string, encoding?: string): string | undefined {
-    throw new Error('readFile Function not implemented.');
-  },
-  fileExists(path: string): boolean {
-    return path === sourceFilename;
-  },
-});
+function createLanguageServiceHost(sourceFilename: string, sourceText: string) {
+  let currentScriptVersion = 0;
+  let currentSourceText = sourceText;
+
+  const languageServiceHost: ts.LanguageServiceHost = {
+    jsDocParsingMode: ts.JSDocParsingMode.ParseNone,
+    getCompilationSettings() {
+      return compilerOptions;
+    },
+    getScriptFileNames() {
+      return [sourceFilename];
+    },
+    getScriptVersion(fileName) {
+      if (fileName !== sourceFilename) return '0';
+      return String(currentScriptVersion);
+    },
+    getScriptSnapshot(fileName) {
+      if (fileName !== sourceFilename) return undefined;
+      return ts.ScriptSnapshot.fromString(currentSourceText);
+    },
+    getCurrentDirectory() {
+      return '/';
+    },
+    directoryExists(directoryName) {
+      return directoryName === '/';
+    },
+    getDefaultLibFileName(options) {
+      return ts.getDefaultLibFileName(options);
+    },
+    readFile(path: string, encoding?: string): string | undefined {
+      throw new Error('readFile Function not implemented.');
+    },
+    fileExists(path: string): boolean {
+      return path === sourceFilename;
+    },
+  };
+
+  function updateFile(newSourceText: string) {
+    currentSourceText = newSourceText;
+    currentScriptVersion++;
+  }
+
+  return {
+    languageServiceHost,
+    updateFile,
+  };
+}
+
+const { languageServiceHost, updateFile } = createLanguageServiceHost(sourceFilename, sourceText);
+const lsp = ts.createLanguageService(languageServiceHost);
 
 // console.log(lsp.getSuggestionDiagnostics(sourceFilename).map((diagnostics) => diagnostics.messageText));
 
-const unusedIdentifierCodeFix = lsp.getCombinedCodeFix(
-  {
-    type: 'file',
-    fileName: sourceFilename,
-  },
-  'unusedIdentifier_delete',
-  {},
-  {}
-);
-const unusedImportsCodeFix = lsp.getCombinedCodeFix(
-  {
-    type: 'file',
-    fileName: sourceFilename,
-  },
-  'unusedIdentifier_deleteImports',
-  {},
-  {}
-);
+const program = lsp.getProgram()!;
 
-console.log(unusedIdentifierCodeFix.changes[0].textChanges);
-console.log(unusedImportsCodeFix.changes[0].textChanges);
+function applyFix(program: ts.Program, fileName: string, fixId: string) {
+  const sf = program.getSourceFile(sourceFilename)!;
+  let text = sf.text;
+  const combinedCodeFix = lsp.getCombinedCodeFix({ type: 'file', fileName }, fixId, {}, {});
+  for (const change of combinedCodeFix.changes) {
+    for (const { span, newText } of change.textChanges) {
+      text = text.slice(0, span.start) + newText + text.slice(span.start + span.length);
+      updateFile(text);
+    }
+  }
+}
+
+applyFix(program, sourceFilename, 'unusedIdentifier_delete');
+// applyFix(program, sourceFilename, 'unusedIdentifier_deleteImports');
+
+console.log(lsp.getEmitOutput(sourceFilename).outputFiles[0].text);
 
 console.log('elapsed:', `${performance.now() - start}ms`);
