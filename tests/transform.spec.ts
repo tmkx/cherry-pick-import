@@ -1,6 +1,115 @@
 import { describe, expect, test } from 'vitest';
 import { cherryPickTransform, CherryPickTransformOptions, trimExport } from '../src/transform';
 
+describe('trimExport', () => {
+  test('no identifiers', () => {
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export const foo = 'bar';
+          export const baz = 'qux';
+        `,
+        identifiers: [],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export {};"`);
+
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export const foo = 'bar';
+          export default 'qux';
+        `,
+        identifiers: [],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export {};"`);
+
+    // FIXME:
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export const foo = () => {};
+          export default function() {}
+        `,
+        identifiers: [],
+      }).trim()
+    ).toMatchInlineSnapshot(`
+      "export default function () { }
+      ;"
+    `);
+  });
+
+  test('not exist', () => {
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export const foo = 'bar';
+          export const baz = 'qux';
+        `,
+        identifiers: ['hello'],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export {};"`);
+  });
+
+  test('side effects', () => {
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          console.log('Hello');
+        `,
+        identifiers: [],
+      }).trim()
+    ).toMatchInlineSnapshot(`"console.log('Hello');"`);
+
+    // FIXME:
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          const r = Math.random();
+
+          export {};
+        `,
+        identifiers: [],
+      }).trim()
+    ).toMatchInlineSnapshot(`
+      "const r = Math.random();
+      export {};"
+    `);
+  });
+
+  test('one identifier', () => {
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export const foo = 'bar';
+          export const baz = 'qux';
+        `,
+        identifiers: ['foo'],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export const foo = 'bar';"`);
+
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export const foo = 'bar';
+          export default function App() {}
+        `,
+        identifiers: ['foo'],
+      }).trim()
+    ).toMatchInlineSnapshot(`
+      "export const foo = 'bar';
+      export default function App() { }"
+    `);
+  });
+});
+
 describe('Plasmo', () => {
   const code = `
     import cssText from 'data-text:~/contents/plasmo-overlay.css';
