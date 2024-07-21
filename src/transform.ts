@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 import ts from 'typescript/lib/tsserverlibrary';
 
 const compilerOptions: ts.CompilerOptions = {
@@ -101,7 +101,7 @@ export function trimExport({ filename, code, identifiers }: CherryPickTransformO
                 const declarations = node.declarationList.declarations;
                 const [shouldKeep, shouldRemove] = partition(
                   declarations,
-                  (decl) => ts.isIdentifier(decl.name) && identifiers.includes(decl.name.escapedText.toString())
+                  (decl) => ts.isIdentifier(decl.name) && identifiers.includes(decl.name.text)
                 );
                 if (shouldKeep.length === 0) return; // no declarations should be kept, just remove the node
               }
@@ -112,8 +112,31 @@ export function trimExport({ filename, code, identifiers }: CherryPickTransformO
               }
               if (ts.isExportAssignment(node)) {
                 // export default xxx;
-                const escapedName = (node as unknown as ts.Type).symbol.escapedName;
-                if (!identifiers.includes(escapedName.toString())) return;
+                const name = (node as unknown as ts.Type).symbol.name;
+                if (!identifiers.includes(name)) return;
+              }
+              if (ts.isExportDeclaration(node)) {
+                const { exportClause } = node;
+                // export * from './foo';
+                if (!exportClause) return;
+                if (ts.isNamedExports(exportClause)) {
+                  // export { foo } from './foo';
+                  if (exportClause.elements.every(({ name }) => !identifiers.includes(name.text))) return;
+                  return ts.factory.updateExportDeclaration(
+                    node,
+                    node.modifiers,
+                    node.isTypeOnly,
+                    ts.factory.updateNamedExports(
+                      exportClause,
+                      exportClause.elements.filter((exportSpecifier) => identifiers.includes(exportSpecifier.name.text))
+                    ),
+                    node.moduleSpecifier,
+                    node.attributes
+                  );
+                } else {
+                  // export * as foo from './foo';
+                  if (!identifiers.includes(exportClause.name.text)) return;
+                }
               }
               return node; // only need to visit the top-level scope, skip ts.visitEachChild(node, visitor, ctx)
             };
