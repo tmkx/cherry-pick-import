@@ -125,6 +125,53 @@ describe('trimExport', () => {
       }).trim()
     ).toMatchInlineSnapshot(`"export default 123;"`);
   });
+
+  test('export declarations', () => {
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export * from './foo';
+          export const foo = 'bar';
+          export const baz = 'qux';
+        `,
+        identifiers: [],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export {};"`);
+
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export { foo } from './foo';
+          export const baz = 'qux';
+        `,
+        identifiers: ['foo'],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export { foo } from './foo';"`);
+
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export { foo } from './foo';
+          export const baz = 'qux';
+        `,
+        identifiers: ['baz'],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export const baz = 'qux';"`);
+
+    expect(
+      trimExport({
+        filename: '/mod.tsx',
+        code: `
+          export * as foo from './foo';
+          export const baz = 'qux';
+        `,
+        identifiers: ['baz'],
+      }).trim()
+    ).toMatchInlineSnapshot(`"export const baz = 'qux';"`);
+  });
 });
 
 describe('Plasmo', () => {
